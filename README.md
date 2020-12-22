@@ -1,9 +1,9 @@
 # Usage
-gcc lab3_task1.c -o lab3_task1
-./lab3_task1  ( or ./lab3_task1 <any path>)
+gcc lab3_task1.c -o lab3_task1  
+./lab3_task1  ( or ./lab3_task1 <any path>)  
 
-gcc lab3_task2.c -o lab3_task2
-./lab3_task2 ( or ./lab3_task2 <any path>)
+gcc lab3_task2.c -o lab3_task2  
+./lab3_task2 ( or ./lab3_task2 <any path>)  
   
   
 # Індивідуальні завдання
