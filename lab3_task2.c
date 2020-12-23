@@ -1,98 +1,83 @@
-#include <unistd.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <dirent.h>
-#include <errno.h>
-#include <stdint.h>
+#include <unistd.h> // for POSIX constants
+#include <stdlib.h> // for working with memory
+#include <string.h> // for string type 
+#include <stdio.h> // for sprintf
+#include <sys/types.h> // for stat struct
+#include <sys/stat.h> // stat struct
+#include <dirent.h> // for dirent*, DIR*
+#include <errno.h> // for errors
+#include <limits.h>
 
-#define MAX_PATH_LENGTH 1024
+#define MAX_PATH_LENGTH 1024 // максимальная длина пути к файлу
 
-void openDir(const char* path, uintmax_t *size);
-void fsize(const char* name, uintmax_t *size,const char* fileName);
+void openDirectory(const char* path, unsigned long int* size); // эта функция открывает каталог и вызывает fsize - функцию размера одного файла
+void fsize(const char* name, unsigned long int* size, const char*  nameWithoutPath); // эта функция считает размер файла, переданного в аргумент
 
 int main(int argc, char* argv[])
 {
-	uintmax_t size = 0; // uintmax_t is at least 64 bits
+	unsigned long int size = 0; // эта переменная для размера всех файлов в каталоге
 	if(argc > 1)
 	{
-		for(int i = argc - 1;i > 0; i--)
+		for(int i = argc - 1;i > 0; i--) // Обход всех параметров, переданных в функцию
 		{
-			fsize(argv[i], &size, argv[i]);
+			openDirectory(argv[i], &size);// вызываем функцию openDirectory и передаем в нее путь к заданой директории  и адрес переменной размера
 		}
 	}
 	else
 	{
-		openDir(".", &size);
+		openDirectory(".", &size); // вызываем функцию openDirectory и передаем в нее путь к текущей директории (".") и адрес переменной размера
 	}
-	printf("Size of files = %ld\n", size);
+	printf("\nSize of files = %ld\n", size); // выводим размер директории
 	return 0;
 }
 
-void openDir(const char* path, uintmax_t *size)
+void openDirectory(const char* path, unsigned long int* size)
 {
-	struct dirent* entry;
-	DIR* dir;
-	char fullPath[PATH_MAX] = {0};
+	struct dirent* entry; // указатель на специальную структуру (тип struct dirent) для каждого элемента каталога
+	DIR* dir; //для работы с каталогами нам нужно определить переменную типа DIR
+	char fullPath[MAX_PATH_LENGTH] = {0}; // full path to file
 
-	if((dir = opendir(path)) == NULL)
+	if((dir = opendir(path)) == NULL) //если эта функция возвращает ошибку
 	{
-		fprintf(stderr, "%s - %s\n", path, strerror(errno));
+		fprintf(stderr, "Error: %s\n", strerror(errno)); // выводим сообщение об ошибке
 		return;
 	}
-	while((entry = readdir(dir)) != NULL)
+	while((entry = readdir(dir)) != NULL)//readdir() возвращает следующую структуру dirent, считанную из файла-директории. При достижении конца списка файлов в директории или возникновении ошибки возвращает NULL
 	{
-		sprintf(fullPath, "%s/%s", path, entry->d_name);
-		fsize(fullPath, size, entry->d_name);
+		sprintf(fullPath, "%s/%s", path, entry->d_name); //в переменную fullPath записываем путь, переданный в эту функцию и имя файла
+		fsize(fullPath, size, entry->d_name); // передаем полный путь к файлу и переменную, в которой считается размер и имя файла
+		//адрес не берем, так как size - уже указатель
 	}
 	closedir(dir);
 }
 
-void fsize(const char* name, uintmax_t *size, const  char* fileName)
+void fsize(const char* name, unsigned long int* size, const char*  nameWithoutPath)
 {
+	//если размер полного пути к файлу больше заданного по условию, то функция fsize не считает размер этого файла
 	if(strlen(name) > MAX_PATH_LENGTH)
 	{
-		printf("The file name can not be greater than 1024\n");
+		printf("The file name cann`t be greater than 1024!\n");
 		return;
 	}
-	unsigned long int tempSize = 0;
 	struct stat statv;
-	if(lstat(name, &statv) == -1)
+	if(lstat(name, &statv) == -1) // lstat идентичен stat, но в случае символических ссылок он возвращает информацию о самой ссылке, а не о файле, на который она указывает
 	{
-		fprintf(stderr, "Can not open %s file: %s\n", name, strerror(errno));
-		return;
+		fprintf(stderr, "Error - %s\n", strerror(errno)); // отобразить сообщение об ошибке
+		return;//выполнение в этой функции заканчивается, но ошибка не критическая, поэтому работа программы продолжается
 	}
-	char fileType; // find file type
-	switch (statv.st_mode & S_IFMT)
+	switch(statv.st_mode & S_IFMT)
 	{
-		case S_IFREG:  	fileType = '-'; break;
-        	case S_IFDIR:   fileType = 'd'; break;
-        	case S_IFCHR:   fileType = 'c'; break;
-        	case S_IFBLK:   fileType = 'b'; break;
-        	case S_IFLNK:   fileType = 'l'; break;
-        	case S_IFSOCK:  fileType = 's'; break;
-		case S_IFIFO:   fileType = 'p'; break;
-	}
-	switch(fileType)
-	{
-		case 'd':
-			if((strcmp(fileName, ".") == 0) || (strcmp(fileName, "..") == 0))
+		case S_IFDIR: // directory
+			if((strcmp(nameWithoutPath, ".") == 0) || (strcmp(nameWithoutPath, "..") == 0))
 			{
-				break; // skip these folders
+				break; // пропускаем
 			}
-			tempSize = statv.st_size;
-			openDir(name, size);
+			*size += statv.st_size;
+			openDirectory(name, size); // открыть каталог
 			break;
-		case '-':
-			tempSize = statv.st_size;
+		case S_IFREG: //если обычный файл - то просто считываем размер файла
+		case S_IFLNK:
+			*size += statv.st_size; // записываем размер файла во временную переменную
 			break;
-		case 'l':
-			tempSize = statv.st_size;
-			break;
-		default :
-			tempSize = 0;
 	}
-	*size += tempSize;
 }
